@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <script type="text/javascript" src="js/jquery-3.6.3.min.js" ></script>
+    <script type="text/javascript" src="js/cos-js-sdk-v5.min.js" ></script>
+    <style>
+        .main{
+
+        }
+
+        .main input{
+            margin: 20px;
+        }
+        .main .upload{
+            background-color: cornflowerblue;
+            color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 1px;
+            padding: 8px 18px;
+        }
+    </style>
+</head>
+<body>
+<div class="main">
+    <input id='cross' type='button' value='CROS跨域测试'>
+
+    <!-- html 页面 DOM 元素 -->
+    <!-- 选择要上传的文件 -->
+    <input id="fileSelector" type="file" />
+    <!-- 点击按钮上传 -->
+    <input id="submitBtn" type="submit" />
+</div>
+</body>
+
+<script>
+
+    $("#cross").click(function(){
+        $.ajax({
+            url:"http://127.0.0.1:8081/api/hello",
+            success:function(data){
+                alert(data);
+            }
+        });
+    });
+
+    // 存储桶名称，由 bucketname-appid 组成，appid 必须填入，可以在 COS 控制台查看存储桶名称。 https://console.cloud.tencent.com/cos5/bucket
+    var Bucket = 'video-1257599456' /* 存储桶，必须字段 */
+
+    // 存储桶 region 可以在 COS 控制台指定存储桶的概览页查看 https://console.cloud.tencent.com/cos5/bucket/
+    // 关于地域的详情见 https://cloud.tencent.com/document/product/436/6224
+    var Region = 'ap-beijing' /* 存储桶所在地域，必须字段 */
+
+    // 初始化实例
+    var cos = new COS({
+        // getAuthorization 必选参数
+        getAuthorization: function (options, callback) {
+            // 初始化时不会调用，只有调用 cos 方法（例如 cos.putObject）时才会进入
+            // 异步获取临时密钥
+            // 服务端 JS 和 PHP 例子：https://github.com/tencentyun/cos-js-sdk-v5/blob/master/server/
+            // 服务端其他语言参考 COS STS SDK ：https://github.com/tencentyun/qcloud-cos-sts-sdk
+            // STS 详细文档指引看：https://cloud.tencent.com/document/product/436/14048
+
+            var url = 'http://localhost:8081/api/sts'; // url 替换成您自己的后端服务
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.onload = function (e) {
+                try {
+                    var data = JSON.parse(e.target.responseText);
+                    var credentials = data.credentials;
+                } catch (e) {
+                }
+                if (!data || !credentials) {
+                    return console.error('credentials invalid:\n' + JSON.stringify(data, null, 2))
+                };
+                callback({
+                    TmpSecretId: credentials.tmpSecretId,
+                    TmpSecretKey: credentials.tmpSecretKey,
+                    SecurityToken: credentials.sessionToken,
+                    // 建议返回服务器时间作为签名的开始时间，避免用户浏览器本地时间偏差过大导致签名错误
+                    StartTime: data.startTime, // 时间戳，单位秒，如：1580000000
+                    ExpiredTime: data.expiredTime, // 时间戳，单位秒，如：1580000000
+                });
+            };
+            xhr.send();
+        }
+    });
+
+
+    function handleFileInUploading(file) {
+        cos.uploadFile({
+            Bucket: 'video-1257599456', // 存储桶名称，必须;Bucket 格式：test-1250000000
+            Region: 'ap-beijing', // 存储桶所在地域, 必须
+            Key: 'data/video/' + file.name, /* 存储在桶里的对象键（例如1.jpg，a/b/test.txt），必须字段 */
+            Body: file, // 上传文件对象
+            SliceSize: 1024 * 1024 * 50,     /* 触发分块上传的阈值，超过5MB使用分块上传，小于5MB使用简单上传。可自行设置，非必须 */
+            onProgress: function(progressData) {
+                console.log(JSON.stringify(progressData));
+            }
+        }, function(err, data) {
+            if (err) {
+                console.log('上传失败', err);
+            } else {
+                console.log('上传成功', data);
+            }
+        });
+    }
+
+    /* 选择文件 */
+    document.getElementById('submitBtn').onclick = function (e) {
+        var file = document.getElementById('fileSelector').files[0];
+        if (!file) {
+            document.getElementById('msg').innerText = '未选择上传文件';
+            return;
+        }
+        handleFileInUploading(file);
+    };
+</script>
+</html>
